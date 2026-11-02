@@ -56,7 +56,8 @@ fun LoginScreen(
     onLogin: (String, String, Boolean) -> Unit,
     busy: Boolean = false,
     errorMessage: String? = null,
-    onNavigateToRegister: () -> Unit = {}
+    onNavigateToRegister: () -> Unit = {},
+    onGoogleLogin: () -> Unit = {}
 ) {
     var correo by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
@@ -100,10 +101,18 @@ fun LoginScreen(
                 )
             }
 
-            Spacer(modifier = Modifier.height(48.dp))
+            Spacer(modifier = Modifier.height(24.dp))
+            Button(onClick = onGoogleLogin, enabled = !busy,
+                modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFF20344F))) {
+                Text("G", color = Color(0xFF4285F4), fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Text("Continuar con Google", modifier = Modifier.padding(start = 12.dp), fontWeight = FontWeight.SemiBold)
+            }
+            Text("o ingresa con correo y contraseña", color = Color.White.copy(alpha = 0.85f), fontSize = 12.sp,
+                modifier = Modifier.padding(vertical = 16.dp))
 
             // Campo Correo Electrónico
-            Text("Cevichería · Acceso de prueba", color = Color.White.copy(alpha = 0.8f))
+            Text("Cevichería · Acceso de clientes", color = Color.White.copy(alpha = 0.8f))
 
             TextField(
                 value = correo,
@@ -129,6 +138,7 @@ fun LoginScreen(
                     cursorColor = buttonCyan
                 ),
                 modifier = Modifier.fillMaxWidth(),
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Email),
                 singleLine = true
             )
 

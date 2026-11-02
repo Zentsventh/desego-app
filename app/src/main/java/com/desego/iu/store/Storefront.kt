@@ -24,6 +24,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -43,19 +44,19 @@ import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
 
-internal val Navy = Color(0xFF163A3C)
-internal val Ocean = Color(0xFF1D4C46)
-internal val Sand = Color(0xFFFAF8F3)
-internal val Orange = Color(0xFF1D4C46)
-internal val Muted = Color(0xFF7B8478)
+internal val Navy = Color(0xFF0F172A)
+internal val Ocean = Color(0xFF004797)
+internal val Sand = Color(0xFFF8FAFC)
+internal val Orange = Color(0xFF004797)
+internal val Muted = Color(0xFF64748B)
 internal val Mint = Color(0xFF16764B)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun Storefront(user: DemoUser, onLogout: () -> Unit, initialTableToken: String? = null) {
+fun Storefront(user: DemoUser?, onLogout: () -> Unit, initialTableToken: String? = null, onRequireLogin: () -> Unit = {}, initialAccount: Boolean = false) {
     val context = LocalContext.current
-    val state = remember(user.email) { StoreState(context, user) }
-    var tab by rememberSaveable { mutableIntStateOf(0) }
+    val state = remember(user?.email) { StoreState(context, user) }
+    var tab by rememberSaveable(user?.email) { mutableIntStateOf(if (initialAccount) 4 else 0) }
     var page by rememberSaveable { mutableStateOf(if (!initialTableToken.isNullOrBlank()) "table" else "main") }
     var productId by rememberSaveable { mutableIntStateOf(1) }
     var orderId by rememberSaveable { mutableStateOf("") }
@@ -65,7 +66,17 @@ fun Storefront(user: DemoUser, onLogout: () -> Unit, initialTableToken: String? 
     val screenState = rememberSaveableStateHolder()
     val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    LaunchedEffect(state) { state.refresh() }
+    LaunchedEffect(state) { while (true) { state.refresh(); delay(30_000) } }
+    DisposableEffect(state) {
+        val connectivity = context.getSystemService(android.net.ConnectivityManager::class.java)
+        val callback = object : android.net.ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: android.net.Network) {
+                scope.launch { state.refresh() }
+            }
+        }
+        connectivity.registerDefaultNetworkCallback(callback)
+        onDispose { connectivity.unregisterNetworkCallback(callback); state.close() }
+    }
     LaunchedEffect(page,tab) {
         if (page=="order" || (page=="main" && tab==3)) {
             while(true) { delay(15000); state.refresh() }
@@ -88,10 +99,10 @@ fun Storefront(user: DemoUser, onLogout: () -> Unit, initialTableToken: String? 
             topBar = {
                 TopAppBar(colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.White),
                     title = {
-                        Column(Modifier.then(if (page == "main") Modifier.clickable { page = "addresses" } else Modifier)) {
+                        Column(Modifier.then(if (page == "main") Modifier.clickable { if (user == null) onRequireLogin() else page = "addresses" } else Modifier)) {
                             if (page == "main") Text("DESEGO · ${if (delivery) "ENTREGAR EN" else "RECOGER EN"}", fontSize = 10.sp, color = Ocean, fontWeight = FontWeight.Bold, letterSpacing = .8.sp)
                             Text(if (page == "main") {
-                                if (delivery) state.addresses.firstOrNull()?.street ?: "Añade tu dirección"
+                                if (delivery) state.addresses.firstOrNull()?.street ?: "El Pacífico, en todos los sentidos."
                                 else "Desego · Local principal"
                             } else when (page) {
                                 "product" -> "Sabor del mar"; "cart" -> "Tu carrito"; "checkout" -> "Finaliza tu pedido"
@@ -146,13 +157,13 @@ fun Storefront(user: DemoUser, onLogout: () -> Unit, initialTableToken: String? 
                             { category -> catalogCategory = category; tab = 1 }, openProduct, add, { page = "reservations" })
                         1 -> StoreCatalog(state, false, catalogQuery, { catalogQuery = it }, catalogCategory, { catalogCategory = it }, openProduct, add)
                         2 -> StoreCatalog(state, true, "", {}, "Todo", {}, openProduct, add)
-                        3 -> StoreOrders(state, { orderId = it.id; page = "order" }, { state.reorder(it); page = "cart" })
-                        else -> StoreAccount(user, state, { page = it }, onLogout)
+                        3 -> if (user == null || state.sessionExpired) GuestAccount(onRequireLogin) else StoreOrders(state, { orderId = it.id; page = "order" }, { state.reorder(it); page = "cart" })
+                        else -> if (user == null || state.sessionExpired) GuestAccount(onRequireLogin) else StoreAccount(user, state, { page = it }, onLogout)
                     }
                     "product" -> ProductDetail(demoProducts.firstOrNull { it.id == productId } ?: StoreProduct(productId,"Producto no disponible","Carta",0,R.drawable.food_ceviche,"Este producto ya no esta disponible.","",available=false), state) { quantity ->
                         state.add(productId, quantity); page = "cart"
                     }
-                    "cart" -> StoreCart(state, delivery, { delivery = it }, { page = "checkout" }, { page = "main"; tab = 1 })
+                    "cart" -> StoreCart(state, delivery, { delivery = it }, { if (user == null || state.sessionExpired) onRequireLogin() else page = "checkout" }, { page = "main"; tab = 1 })
                     "checkout" -> StoreCheckout(state, delivery, { delivery = it }, { page = "addressCheckout" }) { address, payment, note ->
                         scope.launch {
                             runCatching { state.order(delivery,address,payment,note) }
@@ -165,16 +176,27 @@ fun Storefront(user: DemoUser, onLogout: () -> Unit, initialTableToken: String? 
                     }
                     "addresses", "addressCheckout" -> AddressBook(state, message)
                     "profile" -> EditProfile(state) { name, phone ->
-                        scope.launch { runCatching { state.saveProfile(name,phone) }.onSuccess { page="main";message("Perfil actualizado.") }.onFailure { message(it.message ?: "No se pudo guardar el perfil.") } }
+                        scope.launch { runCatching { state.saveProfile(name,phone) }.onSuccess { page="main";message(if (state.pendingChanges > 0) "Perfil guardado en el dispositivo. Se sincronizará con conexión." else "Perfil actualizado.") }.onFailure { message(it.message ?: "No se pudo guardar el perfil.") } }
                     }
-                    "reservations" -> Reservations(state, user.email, scope, message)
+                    "reservations" -> if (user == null || state.sessionExpired) GuestAccount(onRequireLogin) else Reservations(state, user.email, scope, message)
                     "notifications" -> Notifications(state) { orderId = it.id; page = "order" }
-                    "table" -> DiningTable(user.email, message, initialTableToken)
+                    "table" -> DiningTable(user?.email.orEmpty(), message, initialTableToken)
                     "help" -> HelpScreen(message)
                 }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun GuestAccount(login: () -> Unit) {
+    Column(Modifier.fillMaxSize().padding(28.dp), verticalArrangement = Arrangement.Center, horizontalAlignment = Alignment.CenterHorizontally) {
+        Image(painterResource(R.drawable.logo), "Desego", Modifier.size(150.dp))
+        Text("Tu mesa, siempre contigo.", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = Navy)
+        Text("Ingresa con el mismo correo y contraseña de la web o crea tu cuenta. Tus pedidos, direcciones y reservas estarán aquí.", Modifier.padding(vertical = 18.dp), color = Muted)
+        Button(onClick = login, modifier = Modifier.fillMaxWidth().height(52.dp), shape = RoundedCornerShape(16.dp)) { Text("Ingresar o crear mi cuenta") }
+        Text("Puedes explorar la carta y armar tu carrito sin iniciar sesión.", Modifier.padding(top = 16.dp), fontSize = 12.sp, color = Muted)
     }
 }
 
@@ -278,7 +300,7 @@ private fun StoreCheckout(state: StoreState, delivery: Boolean, mode: (Boolean) 
                     }
                 }
                 OutlinedButton(onClick = addresses, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Default.Add, null); Text("Añadir dirección") }
-                Text("Delivery: S/ 5.00. El restaurante coordinara la entrega.", fontSize = 12.sp, color = Muted)
+                Text("Delivery estimado: ${money(storeDeliveryFeeCents.intValue)}. Se valida al confirmar el pedido.", fontSize = 12.sp, color = Muted)
             } else InfoCard("Recojo en el local", "Recojo en DESEGO. Espera a que tu pedido figure como Listo.", Icons.Default.Storefront)
             OutlinedTextField(phone, { phone = it.filter(Char::isDigit).take(9) }, label = { Text("Celular de contacto") },
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), singleLine = true, modifier = Modifier.fillMaxWidth())
@@ -337,7 +359,7 @@ private fun OrderDetail(order: DemoOrder, cancel: () -> Unit, reorder: () -> Uni
         Icon(if (order.status == "Cancelado") Icons.Default.Cancel else Icons.Default.CheckCircle, null, tint = Ocean, modifier = Modifier.size(54.dp))
         Text(if (order.status == "Cancelado") "Pedido cancelado" else "¡Tu pedido ya esta en DESEGO!", fontSize = 27.sp, fontWeight = FontWeight.ExtraBold)
         Text("#${order.id} · ${order.date}", color = Muted)
-        InfoCard("Sin cobro realizado", "${order.payment} · pago pendiente. Pedido registrado en el restaurante.", Icons.Default.Payments)
+        InfoCard(if (order.paymentStatus == "Pagado") "Pago confirmado" else "Estado del pago: ${order.paymentStatus}", "${order.payment} · ${order.paymentStatus}. Estado registrado por DESEGO.", Icons.Default.Payments)
         if (order.status != "Cancelado") {
             Text("Seguimiento", fontWeight = FontWeight.Bold, fontSize = 20.sp)
             (if(order.mode=="Delivery") listOf("Pendiente","Preparando","Listo","En reparto","Entregado") else listOf("Pendiente","Preparando","Listo","Entregado")).forEachIndexed { index, title ->
@@ -371,11 +393,12 @@ private fun StoreAccount(user: DemoUser, state: StoreState, open: (String) -> Un
                     Icon(Icons.Default.AccountCircle, null, tint = Color.White, modifier = Modifier.size(55.dp))
                     Spacer(Modifier.height(12.dp)); Text(state.name, color = Color.White, fontWeight = FontWeight.Bold, fontSize = 24.sp)
                     Text(user.email, color = Color.White.copy(alpha = .75f), fontSize = 13.sp)
-                    Text("Cuenta de cliente · prototipo local", color = Color.White.copy(alpha = .6f), fontSize = 11.sp)
+                    Text("La misma cuenta en la app y en la web", color = Color.White.copy(alpha = .8f), fontSize = 11.sp)
                 }
             }
         }
         item { AccountAction("Mi perfil", "Nombre y celular", Icons.Default.PersonOutline) { open("profile") } }
+        item { InfoCard("${state.loyaltyPoints} puntos Desego", "Tu saldo de fidelidad, compartido con tu cuenta en la web.", Icons.Default.Stars) }
         item { AccountAction("Mis direcciones", "Gestiona tus destinos de delivery", Icons.Default.LocationOn) { open("addresses") } }
         item { AccountAction("Reservar mesa", "Planea tu próxima visita", Icons.Default.TableRestaurant) { open("reservations") } }
         item { AccountAction("Ayuda y contacto", "Preguntas y sugerencias", Icons.Default.SupportAgent) { open("help") } }
@@ -387,9 +410,9 @@ private fun StoreAccount(user: DemoUser, state: StoreState, open: (String) -> Un
             }
         }
         item { OutlinedButton(onClick = { askLogout = true }, modifier = Modifier.fillMaxWidth()) { Text("Cerrar sesión") } }
-        item { Text("DESEGO - Conectado con el restaurante.\nTu carrito se conserva en este dispositivo.", color = Muted, fontSize = 11.sp) }
+        item { Text(if (state.pendingChanges > 0) "${state.pendingChanges} cambios guardados en el dispositivo. Se sincronizarán al recuperar la conexión." else "Cuenta sincronizada con DESEGO. Tu carrito se conserva en este dispositivo.", color = Muted, fontSize = 11.sp) }
     }
-    if (askLogout) AlertDialog(onDismissRequest = { askLogout = false }, title = { Text("¿Cerrar sesión?") }, text = { Text("Tu carrito y favoritos se conservarán para cuando vuelvas.") },
+    if (askLogout) AlertDialog(onDismissRequest = { askLogout = false }, title = { Text("¿Cerrar sesión?") }, text = { Text("Se eliminarán los datos personales y los cambios pendientes de este dispositivo. Tus datos confirmados seguirán en tu cuenta." ) },
         confirmButton = { TextButton(onClick = logout) { Text("Cerrar sesión") } }, dismissButton = { TextButton(onClick = { askLogout = false }) { Text("Volver") } })
 }
 
@@ -489,19 +512,25 @@ private fun Notifications(state: StoreState, open: (DemoOrder) -> Unit) {
 
 @Composable
 private fun HelpScreen(message: (String) -> Unit) {
-    var suggestion by rememberSaveable { mutableStateOf("") }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp), verticalArrangement = Arrangement.spacedBy(18.dp)) {
         Text("Estamos para ayudarte", fontSize = 26.sp, fontWeight = FontWeight.Bold)
-        InfoCard("¿Cómo funciona esta versión?", "Elige tus platos, añade una dirección y recorre el checkout. Los pedidos son de prueba y no generan cobros.", Icons.Default.Info)
-        InfoCard("¿Puedo recoger mi pedido?", "Sí. Puedes elegir Recojo y ver el flujo de atención en tienda.", Icons.Default.Storefront)
-        InfoCard("Ingredientes y alergias", "La carta contiene información de ejemplo. La información final debe ser confirmada por el restaurante.", Icons.Default.Restaurant)
-        OutlinedTextField(suggestion, { suggestion = it.take(500) }, label = { Text("Escribe una sugerencia de prueba") }, minLines = 3, modifier = Modifier.fillMaxWidth())
-        Button(onClick = { suggestion = ""; message("Formulario probado. El envío a soporte se conectará después.") }, enabled = suggestion.trim().length >= 5, modifier = Modifier.fillMaxWidth()) { Text("Probar formulario") }
+        InfoCard("Tu tienda Desego", "Explora la carta, arma tu carrito e ingresa con tu cuenta para enviar un pedido al restaurante.", Icons.Default.Info)
+        InfoCard("Sin conexión", "La carta, las imágenes, tu carrito y la última información de tu cuenta quedan disponibles. Los cambios de perfil y favoritos se sincronizan al recuperar la conexión.", Icons.Default.CloudOff)
+        InfoCard("Pedidos y reservas", "Necesitas conexión para confirmar precios, disponibilidad y horarios. Podrás ver el estado confirmado en tu cuenta de la app y en la web.", Icons.Default.Storefront)
+        InfoCard("Ingredientes y alergias", "Consulta los alérgenos de cada plato y confirma con el restaurante cualquier alergia o riesgo de trazas.", Icons.Default.Restaurant)
     }
 }
 
 @Composable
-internal fun FoodImage(product: StoreProduct, modifier: Modifier) = Image(painterResource(product.image), product.name, modifier, contentScale = ContentScale.Crop)
+internal fun FoodImage(product: StoreProduct, modifier: Modifier) {
+    val context = LocalContext.current
+    val bitmap by produceState<android.graphics.Bitmap?>(null, product.imageUrl) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { com.desego.data.OfflineImages.load(context, product.imageUrl) }
+    }
+    val image = bitmap
+    if (image == null) Image(painterResource(product.image), product.name, modifier, contentScale = ContentScale.Crop)
+    else Image(image.asImageBitmap(), product.name, modifier, contentScale = ContentScale.Crop)
+}
 
 @Composable
 internal fun DeliveryChoice(delivery: Boolean, change: (Boolean) -> Unit) {

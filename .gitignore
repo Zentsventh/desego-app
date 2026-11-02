@@ -13,3 +13,10 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Logs de la JVM
+hs_err_pid*.log
+replay_pid*.log
+*.apk
+*.jks
+*.keystore

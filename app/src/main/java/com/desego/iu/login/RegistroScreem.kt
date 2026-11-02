@@ -52,12 +52,14 @@ import com.desego.R
 @Composable
 fun RegistroScreen(
     onNavigateToLogin: () -> Unit,
-    onRegisterSuccess: (String, String, String) -> Unit,
+    onRegisterSuccess: (String, String, String, String) -> Unit,
     busy: Boolean = false,
-    errorMessage: String? = null
+    errorMessage: String? = null,
+    onGoogleLogin: () -> Unit = {}
 ) {
     var nombre by remember { mutableStateOf("") }
     var correo by remember { mutableStateOf("") }
+    var phone by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
 
@@ -103,6 +105,12 @@ fun RegistroScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
+            Button(onClick = onGoogleLogin, enabled = !busy, modifier = Modifier.fillMaxWidth().height(52.dp),
+                shape = RoundedCornerShape(14.dp), colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFF20344F))) {
+                Text("G", color = Color(0xFF4285F4), fontSize = 22.sp, fontWeight = FontWeight.Bold)
+                Text("Continuar con Google", modifier = Modifier.padding(start = 12.dp), fontWeight = FontWeight.SemiBold)
+            }
+            Text("o crea tu cuenta con correo", color = Color.White, modifier = Modifier.padding(vertical = 12.dp))
             TextField(
                 value = nombre,
                 onValueChange = { nombre = it },
@@ -141,6 +149,12 @@ fun RegistroScreen(
                 singleLine = true
             )
 
+            Spacer(modifier = Modifier.height(16.dp))
+            TextField(value = phone, onValueChange = { phone = it.filter(Char::isDigit).take(15) },
+                label = { Text("Celular (opcional)") }, singleLine = true,
+                keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(keyboardType = androidx.compose.ui.text.input.KeyboardType.Phone),
+                modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp))
+            Text("La misma cuenta de la web. Usa al menos 10 caracteres.", color = Color.White, fontSize = 12.sp)
             Spacer(modifier = Modifier.height(16.dp))
 
             TextField(
@@ -197,7 +211,7 @@ fun RegistroScreen(
 
             if (showError || errorMessage != null) {
                 Text(
-                    text = errorMessage ?: "Completa los datos y confirma la contraseña (mínimo 6 caracteres)",
+                    text = errorMessage ?: "Escribe tu nombre (mínimo 3 letras), correo y confirma tu contraseña (mínimo 10 caracteres)",
                     color = Color(0xFFFF4B2B),
                     fontSize = 12.sp,
                     modifier = Modifier.padding(top = 8.dp)
@@ -209,8 +223,8 @@ fun RegistroScreen(
             Button(
                 enabled = !busy,
                 onClick = {
-                    if (nombre.trim().length >= 2 && android.util.Patterns.EMAIL_ADDRESS.matcher(correo.trim()).matches() && password.length >= 6 && password == confirmPassword) {
-                        onRegisterSuccess(nombre, correo, password)
+                    if (nombre.trim().length >= 3 && android.util.Patterns.EMAIL_ADDRESS.matcher(correo.trim()).matches() && password.length >= 10 && password == confirmPassword) {
+                        onRegisterSuccess(nombre, correo, password, phone)
                     } else {
                         showError = true
                     }

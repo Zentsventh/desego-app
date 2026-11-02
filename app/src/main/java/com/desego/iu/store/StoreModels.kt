@@ -5,9 +5,10 @@ import java.text.NumberFormat
 import java.util.Locale
 
 data class StoreProduct(val id: Int, val name: String, val category: String, val price: Int,
-    val image: Int, val description: String, val allergens: String, val tag: String = "", val available: Boolean = true)
+    val image: Int, val description: String, val allergens: String, val tag: String = "", val available: Boolean = true, val imageUrl: String = "")
 
 val demoProducts = androidx.compose.runtime.mutableStateListOf<StoreProduct>()
+var storeDeliveryFeeCents = androidx.compose.runtime.mutableIntStateOf(500)
 
 fun money(cents: Int): String = "S/ " + NumberFormat.getNumberInstance(Locale("es", "PE")).apply {
     minimumFractionDigits = 2; maximumFractionDigits = 2
@@ -19,9 +20,9 @@ data class CartTotals(val subtotal: Int, val discount: Int, val delivery: Int) {
 fun calculateTotals(cart: Map<Int, Int>, delivery: Boolean, coupon: String): CartTotals {
     val subtotal = demoProducts.sumOf { it.price * (cart[it.id] ?: 0).coerceIn(0, 20) }
     return CartTotals(subtotal, 0,
-        if (delivery && subtotal > 0) 500 else 0)
+        if (delivery && subtotal > 0) storeDeliveryFeeCents.intValue else 0)
 }
 data class DeliveryAddress(val id: String, val label: String, val street: String, val district: String, val reference: String)
 data class DemoOrder(val id: String, val date: String, val items: Map<Int, Int>, val total: Int,
-    val mode: String, val address: String, val payment: String, val note: String, val status: String = "Pendiente", val serverId: Long = 0, val itemNames: Map<Int,String> = emptyMap(), val itemPrices: Map<Int,Int> = emptyMap())
+    val mode: String, val address: String, val payment: String, val note: String, val status: String = "Pendiente", val serverId: Long = 0, val itemNames: Map<Int,String> = emptyMap(), val itemPrices: Map<Int,Int> = emptyMap(), val paymentStatus: String = "Pendiente")
 data class DemoReservation(val id: String, val date: String, val time: String, val people: Int, val status: String = "Solicitada")
