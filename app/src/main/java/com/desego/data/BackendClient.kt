@@ -45,7 +45,11 @@ object BackendClient {
     @Synchronized
     fun remember(enabled: Boolean) {
         prefs?.edit()?.putBoolean("remember", enabled)?.apply()
-        if (enabled) persistCookies() else prefs?.edit()?.remove("sealedCookies")?.remove("cookies")?.apply()
+        if (enabled) {
+            persistCookies()
+        } else {
+            prefs?.edit()?.remove("sealedCookies")?.remove("cookies")?.apply()
+        }
     }
 
     @Synchronized

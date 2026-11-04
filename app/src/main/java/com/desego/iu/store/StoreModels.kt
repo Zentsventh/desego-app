@@ -22,7 +22,13 @@ fun calculateTotals(cart: Map<Int, Int>, delivery: Boolean, coupon: String): Car
     return CartTotals(subtotal, 0,
         if (delivery && subtotal > 0) storeDeliveryFeeCents.intValue else 0)
 }
-data class DeliveryAddress(val id: String, val label: String, val street: String, val district: String, val reference: String)
+data class DeliveryAddress(val id: String, val label: String, val street: String, val district: String, val reference: String, val isDefault: Boolean = false)
 data class DemoOrder(val id: String, val date: String, val items: Map<Int, Int>, val total: Int,
     val mode: String, val address: String, val payment: String, val note: String, val status: String = "Pendiente", val serverId: Long = 0, val itemNames: Map<Int,String> = emptyMap(), val itemPrices: Map<Int,Int> = emptyMap(), val paymentStatus: String = "Pendiente")
 data class DemoReservation(val id: String, val date: String, val time: String, val people: Int, val status: String = "Solicitada")
+
+data class LoyaltyReward(val id: Int, val code: String, val name: String, val description: String, val type: String, val pointsCost: Int, val discountAmount: Double)
+data class LoyaltyRedemption(val id: Int, val code: String, val pointsSpent: Int, val status: String, val rewardName: String, val date: String)
+data class LoyaltyTransaction(val id: Int, val type: String, val pointsDelta: Int, val balanceAfter: Int, val description: String, val date: String)
+data class CustomerReview(val id: Int, val productId: Int, val productName: String, val rating: Int, val comment: String, val date: String)
+data class CustomerStats(val ordersCount: Int = 0, val totalSpent: Double = 0.0, val activeReservationsCount: Int = 0)

@@ -22,6 +22,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "DemoApiDesego"
+rootProject.name = "DesegoApp"
 include(":app")
  

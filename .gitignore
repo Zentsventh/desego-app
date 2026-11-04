@@ -20,3 +20,6 @@ replay_pid*.log
 *.apk
 *.jks
 *.keystore
+
+.kotlin/
+.idea/vcs.xml

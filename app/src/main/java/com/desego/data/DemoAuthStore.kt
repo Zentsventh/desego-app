@@ -19,15 +19,26 @@ class DemoAuthStore(private val context: Context) {
             val result = BackendClient.request("api/mobile/session")
             val json = result.optJSONObject("user")
             if (json == null) {
-                OfflineStore(context).use { it.clearScope("session") }
+                clearLocalSession()
                 null
             } else { cache(json); decode(json) }
         } catch (error: Exception) {
-            if (error is BackendException && error.status in listOf(401, 403, 419)) throw error
+            if (error is BackendException && error.status in listOf(401, 403, 419)) {
+                clearLocalSession()
+                return null
+            }
+
             cachedUser()
         }
     }
-    fun remember(user: DemoUser, enabled: Boolean) { BackendClient.remember(enabled) }
+    private fun clearLocalSession() {
+        val scope = OfflineStore(context).use { it.read("session", "user")?.optString("email")?.lowercase() }
+        BackendClient.clear()
+        OfflineStore(context).use { database ->
+            database.clearScope("session")
+            scope?.let { database.clearScope(it) }
+        }
+    }
     fun logout() {
         synchronized(BackendClient) {
             val scope = OfflineStore(context).use { it.read("session", "user")?.optString("email")?.lowercase() }
@@ -39,19 +50,23 @@ class DemoAuthStore(private val context: Context) {
             }
         }
     }
-    fun login(email: String, password: String): DemoUser {
-        val result = BackendClient.request("api/mobile/login", "POST", JSONObject().put("email",email.trim()).put("password",password).put("remember",true))
+    fun login(email: String, password: String, remember: Boolean): DemoUser {
+        BackendClient.remember(remember)
+        val result = BackendClient.request("api/mobile/login", "POST", JSONObject().put("email",email.trim()).put("password",password).put("remember", remember))
+        BackendClient.remember(remember)
         cache(result.getJSONObject("user"))
         return decode(result.getJSONObject("user"))
     }
     fun register(name: String, email: String, password: String, phone: String = ""): DemoUser {
-        val result = BackendClient.request("api/mobile/register", "POST", JSONObject().put("name",name.trim()).put("email",email.trim()).put("phone",phone.trim()).put("password",password).put("password_confirmation",password))
+        BackendClient.remember(true)
+        val result = BackendClient.request("api/mobile/register", "POST", JSONObject().put("name",name.trim()).put("email",email.trim()).put("phone",phone.trim()).put("password",password).put("password_confirmation",password).put("remember", true))
         BackendClient.remember(true)
         cache(result.getJSONObject("user"))
         return decode(result.getJSONObject("user"))
     }
     fun loginGoogle(idToken: String): DemoUser {
-        val result = BackendClient.request("api/mobile/google/login", "POST", JSONObject().put("id_token", idToken))
+        BackendClient.remember(true)
+        val result = BackendClient.request("api/mobile/google/login", "POST", JSONObject().put("id_token", idToken).put("remember", true))
         BackendClient.remember(true)
         cache(result.getJSONObject("user"))
         return decode(result.getJSONObject("user"))

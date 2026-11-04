@@ -82,10 +82,10 @@ fun AppNavigation(initialTableToken: String? = null) {
             onLogin = { email, password, rememberMe ->
                 busy = true; error = null
                 scope.launch {
-                    val result = withContext(Dispatchers.IO) { runCatching { auth.login(email, password) } }
+                    val result = withContext(Dispatchers.IO) { runCatching { auth.login(email, password, rememberMe) } }
                     val account = result.getOrNull()
                     if (account == null) error = result.exceptionOrNull()?.message ?: "Correo o contraseña incorrectos"
-                    else { auth.remember(account, rememberMe); user = account; authVisible = false; accountTab = true }
+                    else { user = account; authVisible = false; accountTab = true }
                     busy = false
                 }
             }

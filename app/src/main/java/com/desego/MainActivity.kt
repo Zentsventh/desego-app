@@ -5,7 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import com.desego.navigation.AppNavigation
-import com.desego.ui.theme.DemoApiDesegoTheme
+import com.desego.ui.theme.DesegoAppTheme
 
 class MainActivity : ComponentActivity() {
 
@@ -16,7 +16,7 @@ class MainActivity : ComponentActivity() {
             if (uri.scheme == "desego" && uri.host == "mesa") uri.lastPathSegment else null
         }
         setContent {
-            DemoApiDesegoTheme {
+            DesegoAppTheme {
                 AppNavigation(initialTableToken = initialTableToken)
             }
         }
